@@ -1,71 +1,36 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>まとめてZIPダウンロード</title>
-    <!-- JSZip と FileSaver.js の読み込み (CDN) -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .box { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; }
-        button { margin-top: 20px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
-    </style>
-</head>
-<body>
+// ZIP化してダウンロードするメイン処理（0バイトファイル対応版）
+downloadBtn.addEventListener('click', async () => {
+    downloadBtn.disabled = true;
+    downloadBtn.innerText = 'ZIPを作成中...';
 
-    <h1>まとめてZIPダウンロード</h1>
-    <p>ファイルを選択するか、枠内にドラッグ＆ドロップしてください（複数選択可）。</p>
+    try {
+        const zip = new JSZip();
 
-    <!-- 複数ファイル選択(multiple)を有効にした入力フォーム -->
-    <input type="file" id="fileInput" multiple style="display: none;">
-    <div class="box" id="dropArea">ここにファイルをドロップするか、クリックして選択</div>
-
-    <button id="downloadBtn" disabled>ZIPにしてダウンロード</button>
-
-    <script>
-        const fileInput = document.getElementById('fileInput');
-        const dropArea = document.getElementById('dropArea');
-        const downloadBtn = document.getElementById('downloadBtn');
-        let selectedFiles = [];
-
-        // クリックでファイル選択を開く
-        dropArea.addEventListener('click', () => fileInput.click());
-
-        // ドラッグ&ドロップの処理
-        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.style.borderColor = '#000'; });
-        dropArea.addEventListener('dragleave', () => dropArea.style.borderColor = '#ccc');
-        dropArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropArea.style.borderColor = '#ccc';
-            handleFiles(e.dataTransfer.files);
-        });
-
-        // ファイルが選択された時の処理
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-        function handleFiles(files) {
-            selectedFiles = Array.from(files);
-            if (selectedFiles.length > 0) {
-                dropArea.innerText = `${selectedFiles.length} 個のファイルが選択されました。`;
-                downloadBtn.disabled = false;
-            }
+        // 選択されたファイルを一つずつZIPに追加（0バイトの空ファイルもそのまま保持）
+        for (const file of selectedFiles) {
+            zip.file(file.name, file); 
         }
 
-        // ZIP化してダウンロードするメイン処理
-        downloadBtn.addEventListener('click', () => {
-            const zip = new JSZip();
+        // ZIPファイルの生成
+        const content = await zip.generateAsync({ type: 'blob' });
 
-            // 選択されたファイルを一つずつZIPに追加（名前と中身をそのまま保持）
-            selectedFiles.forEach(file => {
-                zip.file(file.name, file); 
-            });
+        // ブラウザ標準のリンク機能でダウンロードを実行
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'archive.zip'; 
+        document.body.appendChild(a);
+        a.click(); // 疑似クリック
+        
+        // 後片付け
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-            // ZIPファイルを生成してダウンロードを実行
-            zip.generateAsync({ type: 'blob' }).then((content) => {
-                saveAs(content, 'archive.zip');
-            });
-        });
-    </script>
-</body>
-</html>
+    } catch (error) {
+        alert('ZIP作成中にエラーが発生しました。開発者コンソールを確認してください。');
+        console.error(error);
+    } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.innerText = 'ZIPにしてダウンロード';
+    }
+});
