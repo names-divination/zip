@@ -1,36 +1,110 @@
-// ZIP化してダウンロードするメイン処理（0バイトファイル対応版）
-downloadBtn.addEventListener('click', async () => {
-    downloadBtn.disabled = true;
-    downloadBtn.innerText = 'ZIPを作成中...';
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>まとめてZIPダウンロード</title>
+    <!-- JSZipのみ読み込み -->
+    <script src="https://cloudflare.com"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .box { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; border-radius: 8px; }
+        .box:hover { border-color: #666; }
+        button { margin-top: 20px; padding: 12px 24px; font-size: 16px; cursor: pointer; width: 100%; border-radius: 4px; border: none; background: #007bff; color: white; font-weight: bold; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
 
-    try {
-        const zip = new JSZip();
+    <h1>まとめてZIPダウンロード</h1>
+    <p>ファイルを選択するか、枠内にドラッグ＆ドロップしてください（複数選択可）。0バイトの空ファイルもそのまま保持されます。</p>
 
-        // 選択されたファイルを一つずつZIPに追加（0バイトの空ファイルもそのまま保持）
-        for (const file of selectedFiles) {
-            zip.file(file.name, file); 
+    <input type="file" id="fileInput" multiple style="display: none;">
+    <div class="box" id="dropArea">ここにファイルをドロップするか、クリックして選択</div>
+
+    <button id="downloadBtn" disabled>ZIPにしてダウンロード</button>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const dropArea = document.getElementById('dropArea');
+        const downloadBtn = document.getElementById('downloadBtn');
+        let selectedFiles = [];
+
+        dropArea.addEventListener('click', () => fileInput.click());
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.style.borderColor = '#000'; });
+        dropArea.addEventListener('dragleave', () => dropArea.style.borderColor = '#ccc');
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = '#ccc';
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            if (selectedFiles.length > 0) {
+                dropArea.innerText = `${selectedFiles.length} 個のファイルが選択されました。`;
+                downloadBtn.disabled = false;
+            }
         }
 
-        // ZIPファイルの生成
-        const content = await zip.generateAsync({ type: 'blob' });
+        downloadBtn.addEventListener('click', async () => {
+            downloadBtn.disabled = true;
+            downloadBtn.innerText = 'ZIPを作成中...';
 
-        // ブラウザ標準のリンク機能でダウンロードを実行
-        const url = URL.createObjectURL(content);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'archive.zip'; 
-        document.body.appendChild(a);
-        a.click(); // 疑似クリック
-        
-        // 後片付け
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+            try {
+                const zip = new JSZip();
+                const usedNames = new Set(); // 重複チェック用のセット
 
-    } catch (error) {
-        alert('ZIP作成中にエラーが発生しました。開発者コンソールを確認してください。');
-        console.error(error);
-    } finally {
-        downloadBtn.disabled = false;
-        downloadBtn.innerText = 'ZIPにしてダウンロード';
-    }
-});
+                for (const file of selectedFiles) {
+                    let fileName = file.name;
+
+                    // 【重複対策】もし同名ファイルがあったら「ファイル名 (1).拡張子」のように自動リネーム
+                    if (usedNames.has(fileName)) {
+                        const lastDot = fileName.lastIndexOf('.');
+                        const baseName = lastDot !== -1 ? fileName.substring(0, lastDot) : fileName;
+                        const ext = lastDot !== -1 ? fileName.substring(lastDot) : '';
+                        
+                        let counter = 1;
+                        while (usedNames.has(`${baseName} (${counter})${ext}`)) {
+                            counter++;
+                        }
+                        fileName = `${baseName} (${counter})${ext}`;
+                    }
+
+                    usedNames.add(fileName);
+                    // 0バイトファイルも含め、そのままZIPに追加
+                    zip.file(fileName, file); 
+                }
+
+                // 【文字化け対策】UTF-8エンコードを明示してZIP生成
+                const content = await zip.generateAsync({ 
+                    type: 'blob',
+                    encodeFileName: function(string) {
+                        return new TextEncoder().encode(string);
+                    }
+                });
+
+                // ブラウザ標準機能で安全にダウンロード
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'archive.zip'; 
+                document.body.appendChild(a);
+                a.click(); 
+                
+                // 後片付け
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                alert('ZIP作成中にエラーが発生しました。開発者コンソールを確認してください。');
+                console.error(error);
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.innerText = 'ZIPにしてダウンロード';
+            }
+        });
+    </script>
+</body>
+</html>
